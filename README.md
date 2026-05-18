@@ -5,7 +5,6 @@ A strict **zero-server**, client-side application that accurately calculates you
 ## Features
 - **100% Private**: Your EA data is processed entirely in your browser using local JavaScript APIs. No data is ever uploaded or stored.
 - **Auto-Detection**: Automatically identifies your previous Mythic/Heirloom purchases and dynamically filters out older packs.
-- **Collection Event Edge Cases**: Provides UI guidance to account for the anomalies in EA's data structure regarding 24-pack Collection Events.
 - **Lifetime Tracking**: See exactly how many standard packs you've opened across your account's lifetime.
 
 ## How to Use
