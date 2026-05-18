@@ -1,0 +1,13 @@
+@import "tailwindcss";
+
+@theme {
+  --color-dark: #121212;
+  --color-darker: #0a0a0a;
+  --color-apex-red: #da292a;
+}
+
+body {
+  background-color: var(--color-darker);
+  color: white;
+  font-family: 'Inter', system-ui, sans-serif;
+}
