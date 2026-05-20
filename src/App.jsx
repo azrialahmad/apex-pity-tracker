@@ -4,6 +4,9 @@ import { Upload, ShieldCheck, AlertCircle, Info, BookOpen, Calculator } from 'lu
 export default function App() {
   const [currentView, setCurrentView] = useState('tracker'); // 'tracker' or 'tutorial'
   const [allTimestamps, setAllTimestamps] = useState([]);
+  const [eventPackTimes, setEventPackTimes] = useState(new Map());
+  const [eventBreakdown, setEventBreakdown] = useState([]);
+  const [excludeEventPacks, setExcludeEventPacks] = useState(false);
   const [mythicEvents, setMythicEvents] = useState([]);
   const [selectedMythicTime, setSelectedMythicTime] = useState(null);
 
@@ -18,6 +21,8 @@ export default function App() {
     setFileName(file.name);
     setError(null);
     setAllTimestamps([]);
+    setEventPackTimes(new Map());
+    setEventBreakdown([]);
     setMythicEvents([]);
     setSelectedMythicTime(null);
     setManualDate("");
@@ -44,12 +49,14 @@ export default function App() {
         }
 
         const packTimes = new Set();
+        const eventPacksMap = new Map();
         const mythicsMap = new Map(); 
 
         items.forEach(item => {
           // 1. Extract Pack Openings
           let isPack = false;
           let dateGranted = null;
+          let eventName = null;
 
           (item.details || []).forEach(d => {
             if (d.key === 'acquisitionType' && (d.value === 'packs_open' || d.value === 'pack_open')) {
@@ -59,12 +66,18 @@ export default function App() {
               // Fix Safari/cross-browser date parsing bugs
               dateGranted = d.value.replace(" UTC", "");
             }
+            if (d.key === 'Theme') {
+              eventName = d.value;
+            }
           });
 
           if (isPack && dateGranted) {
             const time = new Date(dateGranted).getTime();
             if (!isNaN(time)) {
               packTimes.add(time);
+              if (eventName) {
+                eventPacksMap.set(time, eventName);
+              }
             }
           }
 
@@ -116,7 +129,17 @@ export default function App() {
         const sortedPacks = Array.from(packTimes).sort((a, b) => a - b);
         const sortedMythics = Array.from(mythicsMap.values()).sort((a, b) => b.date - a.date);
 
+        const breakdownMap = {};
+        eventPacksMap.forEach(theme => {
+          breakdownMap[theme] = (breakdownMap[theme] || 0) + 1;
+        });
+        const sortedBreakdown = Object.entries(breakdownMap)
+          .sort((a, b) => b[1] - a[1])
+          .map(([name, count]) => ({ name, count }));
+
         setAllTimestamps(sortedPacks);
+        setEventPackTimes(eventPacksMap);
+        setEventBreakdown(sortedBreakdown);
         setMythicEvents(sortedMythics);
 
         if (sortedMythics.length > 0) {
@@ -147,9 +170,13 @@ export default function App() {
       }
     }
 
-    const filtered = activeResetTime ? allTimestamps.filter(t => t > activeResetTime) : allTimestamps;
+    const baseTimestamps = excludeEventPacks 
+      ? allTimestamps.filter(t => !eventPackTimes.has(t)) 
+      : allTimestamps;
+
+    const filtered = activeResetTime ? baseTimestamps.filter(t => t > activeResetTime) : baseTimestamps;
     return { packCount: filtered.length, validPacks: filtered };
-  }, [allTimestamps, hasHeirloom, manualDate, selectedMythicTime]);
+  }, [allTimestamps, eventPackTimes, hasHeirloom, manualDate, selectedMythicTime, excludeEventPacks]);
 
   const progress = Math.min((packCount / 500) * 100, 100);
 
@@ -278,6 +305,32 @@ export default function App() {
                       </div>
                     </div>
                   )}
+
+                  <hr className="border-neutral-800/50 my-4" />
+                  
+                  <label className="flex items-center gap-3 cursor-pointer group">
+                    <div className="relative flex items-center justify-center">
+                      <input
+                        type="checkbox"
+                        checked={excludeEventPacks}
+                        onChange={(e) => setExcludeEventPacks(e.target.checked)}
+                        className="w-5 h-5 appearance-none rounded border border-neutral-700 bg-neutral-950 checked:bg-blue-500 checked:border-blue-500 transition-colors peer"
+                      />
+                      <div className="absolute inset-0 pointer-events-none flex items-center justify-center opacity-0 peer-checked:opacity-100">
+                        <svg className="w-3.5 h-3.5 text-white" viewBox="0 0 14 14" fill="none">
+                          <path d="M3 8L6 11L11 3.5" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" stroke="currentColor" />
+                        </svg>
+                      </div>
+                    </div>
+                    <div>
+                      <span className="font-medium text-neutral-200 group-hover:text-white transition-colors block">
+                        Exclude Collection Event Packs (Experimental)
+                      </span>
+                      <span className="text-xs text-neutral-500 block">
+                        May inadvertently remove standard packs that contained thematic items.
+                      </span>
+                    </div>
+                  </label>
                 </div>
 
                 {/* Dashboard Display */}
@@ -312,11 +365,43 @@ export default function App() {
                       <p className="text-xl font-bold text-neutral-300">{allTimestamps.length}</p>
                     </div>
 
-                    <div className="bg-red-950/20 border border-red-900/30 rounded-xl p-4 text-left max-w-lg mt-2">
-                      <p className="text-xs text-neutral-400 leading-relaxed">
-                        <strong className="text-red-400 font-semibold uppercase tracking-wider">Note:</strong> EA's data groups Collection Event Packs and Standard Packs together. If you have purchased 24-pack Collection Events in the past, those packs are currently inflating this total. You will need to manually subtract them (e.g., subtract 24 if you bought one full event) to get your true standard pity count.
-                      </p>
-                    </div>
+                    {!excludeEventPacks && (
+                      <div className="bg-red-950/20 border border-red-900/30 rounded-xl p-4 text-left max-w-lg mt-2">
+                        <p className="text-xs text-neutral-400 leading-relaxed">
+                          <strong className="text-red-400 font-semibold uppercase tracking-wider">Note:</strong> EA's data groups Collection Event Packs and Standard Packs together. If you have purchased 24-pack Collection Events in the past, those packs are currently inflating this total. Use the toggle above to filter them out, or manually subtract them.
+                        </p>
+                      </div>
+                    )}
+
+                    {excludeEventPacks && eventBreakdown.length > 0 && (
+                      <div className="w-full mt-2">
+                        <details className="text-left group/details w-full">
+                          <summary className="cursor-pointer text-xs font-semibold text-neutral-500 hover:text-neutral-300 transition-colors list-none flex items-center justify-center gap-1 uppercase tracking-widest bg-neutral-950/50 border border-neutral-800/50 rounded-xl py-2 px-4 mx-auto max-w-xs">
+                            <span className="group-open/details:hidden">View Excluded Event Packs ({eventPackTimes.size})</span>
+                            <span className="hidden group-open/details:block">Hide Excluded Event Packs</span>
+                            <svg className="w-3 h-3 transition-transform group-open/details:rotate-180" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" /></svg>
+                          </summary>
+                          <div className="mt-4 bg-neutral-950/50 border border-neutral-800/50 rounded-xl p-4 max-h-48 overflow-y-auto custom-scrollbar">
+                            <table className="w-full text-xs text-left text-neutral-400">
+                              <thead className="text-neutral-500 uppercase font-semibold border-b border-neutral-800/50">
+                                <tr>
+                                  <th className="pb-2">Theme ID</th>
+                                  <th className="pb-2 text-right">Packs</th>
+                                </tr>
+                              </thead>
+                              <tbody>
+                                {eventBreakdown.map(ev => (
+                                  <tr key={ev.name} className="border-b border-neutral-800/30 last:border-0 hover:bg-neutral-900/50">
+                                    <td className="py-2 font-mono text-neutral-300">{ev.name}</td>
+                                    <td className="py-2 text-right font-bold text-blue-400">{ev.count}</td>
+                                  </tr>
+                                ))}
+                              </tbody>
+                            </table>
+                          </div>
+                        </details>
+                      </div>
+                    )}
                   </div>
                 </div>
 
