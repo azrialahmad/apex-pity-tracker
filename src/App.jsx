@@ -14,6 +14,8 @@ export default function App() {
   const [manualDate, setManualDate] = useState("");
   const [error, setError] = useState(null);
   const [fileName, setFileName] = useState("");
+  const [isParsed, setIsParsed] = useState(false);
+  const [isInventoryMissing, setIsInventoryMissing] = useState(false);
 
   const handleFileUpload = (e) => {
     const file = e.target.files[0];
@@ -26,25 +28,35 @@ export default function App() {
     setMythicEvents([]);
     setSelectedMythicTime(null);
     setManualDate("");
+    setIsParsed(false);
+    setIsInventoryMissing(false);
 
     const reader = new FileReader();
     reader.onload = (event) => {
       try {
         const data = JSON.parse(event.target.result);
         let items = [];
+        let hasInventoryKey = false;
         if (data && Array.isArray(data.userData)) {
           data.userData.forEach(ud => {
             if (Array.isArray(ud.subscribers)) {
               ud.subscribers.forEach(sub => {
-                if (sub.userData && Array.isArray(sub.userData.currentInventoryItems)) {
-                  items = items.concat(sub.userData.currentInventoryItems);
+                if (sub.userData) {
+                  if ('currentInventoryItems' in sub.userData) {
+                    hasInventoryKey = true;
+                  }
+                  if (Array.isArray(sub.userData.currentInventoryItems)) {
+                    items = items.concat(sub.userData.currentInventoryItems);
+                  }
                 }
               });
             }
           });
         }
+        setIsInventoryMissing(!hasInventoryKey);
 
-        if (items.length === 0) {
+        const hasApexData = data && Array.isArray(data.userData) && data.userData.some(ud => ud.product === "Apex Legends");
+        if (!hasApexData) {
           throw new Error("Invalid JSON structure. Ensure this is the correct EA Data Export.");
         }
 
@@ -141,6 +153,7 @@ export default function App() {
         setEventPackTimes(eventPacksMap);
         setEventBreakdown(sortedBreakdown);
         setMythicEvents(sortedMythics);
+        setIsParsed(true);
 
         if (sortedMythics.length > 0) {
           setHasHeirloom(true);
@@ -241,7 +254,7 @@ export default function App() {
             )}
 
             {/* Results Area */}
-            {allTimestamps.length > 0 && (
+            {isParsed && (
               <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-700">
 
                 {/* Heirloom Selector Configuration */}
@@ -359,13 +372,25 @@ export default function App() {
                       : <span className="text-green-400 drop-shadow-[0_0_10px_rgba(74,222,128,0.5)]">You have reached the 500 pack limit! Shards guaranteed.</span>}
                   </p>
 
+                  {isInventoryMissing && (
+                    <div className="mt-6 bg-amber-950/20 border border-amber-900/30 rounded-xl p-4 text-left max-w-lg mx-auto flex items-start gap-3 text-amber-400 text-xs leading-relaxed animate-in fade-in slide-in-from-bottom-2 duration-300">
+                      <AlertCircle className="w-5 h-5 shrink-0 text-amber-500 mt-0.5" />
+                      <div className="space-y-1">
+                        <p className="font-semibold uppercase tracking-wider text-amber-300">Inventory Items Missing from EA Export</p>
+                        <p className="text-neutral-400">
+                          EA's data export did not include your inventory items (typical for Switch, PlayStation, Xbox, or newly merged cross-progression accounts). Without this data, we cannot count your historically opened packs.
+                        </p>
+                      </div>
+                    </div>
+                  )}
+
                   <div className="mt-8 pt-6 border-t border-neutral-800/50 flex flex-col items-center gap-4">
                     <div className="bg-neutral-950/50 rounded-xl px-6 py-3 border border-neutral-800/30">
                       <p className="text-xs text-neutral-500 uppercase tracking-wider mb-1">Lifetime Total</p>
                       <p className="text-xl font-bold text-neutral-300">{allTimestamps.length}</p>
                     </div>
 
-                    {!excludeEventPacks && (
+                    {!excludeEventPacks && !isInventoryMissing && (
                       <div className="bg-red-950/20 border border-red-900/30 rounded-xl p-4 text-left max-w-lg mt-2">
                         <p className="text-xs text-neutral-400 leading-relaxed">
                           <strong className="text-red-400 font-semibold uppercase tracking-wider">Note:</strong> EA's data groups Collection Event Packs and Standard Packs together. If you have purchased 24-pack Collection Events in the past, those packs are currently inflating this total. Use the toggle above to filter them out, or manually subtract them.
